@@ -37,39 +37,39 @@ if [ ! -d ${VENV} ]; then
 fi
 
 # if repository directory does not exist, make it and clone repository
-if [ ! -d ${SRC} ]; then
-  mkdir -p ${SRC}
-  git clone --depth=50 --branch=${BRANCH} ${REPO} ${SRC}
-fi
+#if [ ! -d ${SRC} ]; then
+#  mkdir -p ${SRC}
+#  git clone --depth=50 --branch=${BRANCH} ${REPO} ${SRC}
+#fi
 
 # Activate Python virtual environment and install/upgrade packages
 source ${VENV}/bin/activate
-pip install -U platformio
-pip install -r ${SRC}/docs/requirements.txt
-
-# fetch latest version from active branch
-cd ${SRC}
-git fetch --tags
-git rebase
-git submodule update --init --recursive
-if (( $PULL_REQ != 0 )); then
-  git fetch origin +refs/pull/${PULL_REQ}/merge:
-  git checkout -qf FETCH_HEAD
-  if [ -z "$DESCRIPTION" ]
-  then
-    GIT_DESCRIBE=`git describe|cut -d'-' -f-3`
-    DESCRIPTION=`echo "${GIT_DESCRIBE}-PR_${PULL_REQ}"`
-  fi
-fi
+#pip install -U platformio
+#pip install -r ${SRC}/docs/requirements.txt
+#
+## fetch latest version from active branch
+#cd ${SRC}
+#git fetch --tags
+#git rebase
+#git submodule update --init --recursive
+#if (( $PULL_REQ != 0 )); then
+#  git fetch origin +refs/pull/${PULL_REQ}/merge:
+#  git checkout -qf FETCH_HEAD
+#  if [ -z "$DESCRIPTION" ]
+#  then
+#    GIT_DESCRIBE=`git describe|cut -d'-' -f-3`
+#    DESCRIPTION=`echo "${GIT_DESCRIBE}-PR_${PULL_REQ}"`
+#  fi
+#fi
 
 # Build documentation
-cd ${SRC}/docs
-make html
-
+#cd ${SRC}/docs
+#make html
+#
 # Update (and clean) all targets
 # N.B. clean does also install missing packages which must be installed before applying patches.
 cd ${SRC}
-platformio update
+#platformio update
 platformio run --target clean
 # patch platformio core libs for PUYA bug (https://github.com/letscontrolit/ESPEasy/issues/650)
 cd ${SRC}/patches; ./check_puya_patch;
@@ -85,9 +85,10 @@ PLATFORMIO_BUILD_FLAGS="-D CONTINUOUS_INTEGRATION" platformio run
 
 # Rename all built files, compute CRC and insert binaryFilename
 # Collect all in a zip file.
-if [ -z "$DESCRIPTION" ]
-then
-  ${SRC}/before_deploy
-else
-  ${SRC}/before_deploy -d ${DESCRIPTION}
-fi
+
+#if [ -z "$DESCRIPTION" ]
+#then
+#  ${SRC}/before_deploy
+#else
+#  ${SRC}/before_deploy -d ${DESCRIPTION}
+#fi

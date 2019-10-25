@@ -820,7 +820,6 @@ To create/register a plugin, you have to :
   #define DISABLE_SOFTWARE_SERIAL
 #endif
 
-
 /*
 #if defined(USES_P00x) || defined(USES_P00y)
 #include <the_required_lib.h>
@@ -847,6 +846,7 @@ To create/register a plugin, you have to :
 #if defined(USES_C012) || defined (USES_C015)
   #define USES_BLYNK
 #endif
+#define USES_P090   // Fan control
 
 
 
