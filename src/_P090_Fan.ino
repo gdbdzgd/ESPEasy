@@ -1,6 +1,10 @@
 #ifdef USES_P090
 
 #include "src/DataStructs/PinMode.h"
+#include <Arduino.h>
+#include <iostream>   // std::cout
+#include <string>
+
 
 // #######################################################################################################
 // #################################### Plugin 090: Input Switch #########################################
@@ -31,6 +35,8 @@ Servo servo2;
 // Make sure the initial default is a switch (value 0)
 #define PLUGIN_090_TYPE_PWM_FANCONTROL           0
 
+#define P90_Nlines 1        // The number of different lines which can be displayed
+#define P90_Nchars 64
 // FIXME TD-er: needed to store values for switch plugin which need extra data like PWM.
 typedef uint16_t portStateExtra_t;
 std::map<uint32_t, portStateExtra_t> p090_MapPortStatus_extras;
@@ -93,7 +99,7 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
       Device[deviceCount].Ports              = 0;
       Device[deviceCount].PullUpOption       = false;
       Device[deviceCount].InverseLogicOption = false;
-      Device[deviceCount].FormulaOption      = false;
+      Device[deviceCount].FormulaOption      = true;
       Device[deviceCount].ValueCount         = 1;
       Device[deviceCount].SendDataOption     = false;
       Device[deviceCount].TimerOption        = true;
@@ -144,20 +150,25 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
    //4: full_speed_pwm (100*10) 1000
       addFormNumericBox(F("最低转速(百分比)"),
                         F("p090_lowest_speed"),
-                        round(PCONFIG_FLOAT(0)),0,100);
+                        round(PCONFIG(0)),0,100);
       addFormNumericBox(F("满转速温度℃ "),
-                        F("p090_fullspeed_speed"),
-                        round(PCONFIG_FLOAT(1)),0,100);
+                        F("p090_fullspeed_temp"),
+                        round(PCONFIG(1)),0,100);
       addFormNumericBox(F("加速起始温度℃ "),
                         F("p090_speed_up_temp"),
-                        round(PCONFIG_FLOAT(2)),0,100);
+                        round(PCONFIG(2)),0,100);
       addFormNumericBox(F("风扇调速频率 HZ "),
                         F("p090_frequency"),
-                        round(PCONFIG_FLOAT(3)),0,100);
+                        round(PCONFIG(3)),1,50000);
 
       // TO-DO: add Extra-Long Press event
       // addFormCheckBox(F("Extra-Longpress event (20 & 21)"), F("p001_elp"), PCONFIG_LONG(1));
       // addFormNumericBox(F("Extra-Longpress min. interval (ms)"), F("p001_elpmininterval"), PCONFIG_LONG(2), 500, 2000);
+     char sensor[P90_Nchars];
+     LoadCustomTaskSettings(event->TaskIndex, (byte*)&sensor, P90_Nchars);
+     addFormTextBox(String(F("[温度传感器名称#值]")) , F("P090_temp_form_senser"), sensor, 64);
+     strncpy(sensor,  WebServer.arg(F("p089_ping_host")).c_str() , sizeof(sensor));
+
 
       success = true;
       break;
@@ -165,14 +176,18 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SAVE:
     {
+      char sensor[P90_Nchars];
       PCONFIG(0) = getFormItemInt(F("p090_lowest_speed"));
-      PCONFIG(1) = getFormItemInt(F("p090_fullspeed_speed"));
+      PCONFIG(1) = getFormItemInt(F("p090_fullspeed_temp"));
       PCONFIG(2) = getFormItemInt(F("p090_speed_up_temp"));
-      PCONFIG(2) = getFormItemInt(F("p090_frequency"));
-
+      PCONFIG(3) = getFormItemInt(F("p090_frequency"));
       // TO-DO: add Extra-Long Press event
       // PCONFIG_LONG(1) = isFormItemChecked(F("p001_elp"));
       // PCONFIG_LONG(2) = getFormItemInt(F("p001_elpmininterval"));
+
+      strncpy(sensor, WebServer.arg(F("p000_temp_form_sensor")).c_str(),sizeof(sensor));
+      SaveCustomTaskSettings(event->TaskIndex, (byte*)&strncpy, 64);
+
 
       // check if a task has been edited and remove 'task' bit from the previous pin
       for (std::map<uint32_t, portStatusStruct>::iterator it = globalMapPortStatus.begin(); it != globalMapPortStatus.end(); ++it) {
@@ -221,6 +236,25 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
           pinMode(CONFIG_PIN1, INPUT);
           newStatus.mode = PIN_MODE_INPUT;
         }
+        // if boot state must be send, inverse default state
+        // this is done to force the trigger in PLUGIN_TEN_PER_SECOND
+
+        // set initial UserVar of the switch
+        if (Settings.TaskDevicePin1Inversed[event->TaskIndex]) {
+          UserVar[event->BaseVarIndex] = !newStatus.state;
+        } else {
+          UserVar[event->BaseVarIndex] = newStatus.state;
+        }
+
+        // counters = 0
+        PCONFIG(0)      = 10; // doubleclick counter
+        PCONFIG(1)      = 60; // doubleclick counter
+        PCONFIG(2)      = 30; // doubleclick counter
+        PCONFIG(3)      = 25000; // doubleclick counter
+          //PCONFIG(0) = getFormItemInt(F("p090_lowest_speed"));
+          //PCONFIG(1) = getFormItemInt(F("p090_fullspeed_speed"));
+          //PCONFIG(2) = getFormItemInt(F("p090_speed_up_temp"));
+          //PCONFIG(3) = getFormItemInt(F("p090_frequency"));
 
         savePortStatus(key, newStatus);
       }
@@ -279,7 +313,29 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
     case PLUGIN_TEN_PER_SECOND:
     {
     }
+    case PLUGIN_ONCE_A_SECOND:
+      {
+      }
 
+    case PLUGIN_READ:
+      {
+      String log     = "";
+        String strings[P90_Nlines];
+        LoadCustomTaskSettings(event->TaskIndex, strings, P90_Nlines, P90_Nchars);
+        for (byte x = 0; x < P90_Nlines; x++)
+        {
+          if (strings[x].length())
+          {
+            String stemp100 = parseTemplate(strings[x], P90_Nchars );
+            //int inttemp100 = stemp100.toInt();
+            //std::stoi (stemp100,nullptr,10);
+              log  = F("SW   : read temp*100 ");
+              log += stemp100;
+          }
+        }
+        success = false;
+        break;
+      }
     case PLUGIN_WRITE:
     {
       String log     = "";
@@ -292,6 +348,7 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
 
         if ((event->Par1 >= 0) && (event->Par1 <= PIN_D_MAX))
         {
+          analogWriteFreq(event->Par3);
           portStatusStruct tempStatus;
 
           // FIXME TD-er: PWM values cannot be stored very well in the portStatusStruct.
@@ -305,35 +362,6 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
             #if defined(ESP8266)
           pinMode(event->Par1, OUTPUT);
             #endif // if defined(ESP8266)
-
-          if (event->Par3 != 0)
-          {
-            const byte prev_mode = tempStatus.mode;
-            uint16_t prev_value  = psExtra;
-
-            // getPinState(PLUGIN_ID_001, event->Par1, &prev_mode, &prev_value);
-            if (prev_mode != PIN_MODE_PWM) {
-              prev_value = 0;
-            }
-
-            int32_t step_value = ((event->Par2 - prev_value) << 12) / event->Par3;
-            int32_t curr_value = prev_value << 12;
-
-            int i = event->Par3;
-
-            while (i--) {
-              curr_value += step_value;
-              int16_t new_value;
-              new_value = (uint16_t)(curr_value >> 12);
-                #if defined(ESP8266)
-              analogWrite(event->Par1, new_value);
-                #endif // if defined(ESP8266)
-                #if defined(ESP32)
-              analogWriteESP32(event->Par1, new_value);
-                #endif // if defined(ESP32)
-              delay(1);
-            }
-          }
 
             #if defined(ESP8266)
           analogWrite(event->Par1, event->Par2);
@@ -359,7 +387,7 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
           log += event->Par2;
 
           if (event->Par3 != 0) {
-            log += F(" duration ");
+            log += F(" frequency to: ");
             log += event->Par3;
           }
           addLog(LOG_LEVEL_INFO, log);
@@ -373,7 +401,6 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_TIMER_IN:
     {
-      digitalWrite(event->Par1, event->Par2);
 
       // setPinState(PLUGIN_ID_001, event->Par1, PIN_MODE_OUTPUT, event->Par2);
       portStatusStruct tempStatus;
@@ -421,7 +448,5 @@ void analogWriteESP32(int pin, int value)
 }
 
 #endif // if defined(ESP32)
-
-// TD-er: Needed to fix a mistake in earlier fixes.
 
 #endif // USES_P001
