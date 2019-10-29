@@ -35,7 +35,7 @@ Servo servo2;
 // Make sure the initial default is a switch (value 0)
 #define PLUGIN_090_TYPE_PWM_FANCONTROL           0
 
-#define P90_Nlines 1        // The number of different lines which can be displayed
+#define P90_Nlines 8        // The number of different lines which can be displayed
 #define P90_Nchars 64
 // FIXME TD-er: needed to store values for switch plugin which need extra data like PWM.
 typedef uint16_t portStateExtra_t;
@@ -164,10 +164,14 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
       // TO-DO: add Extra-Long Press event
       // addFormCheckBox(F("Extra-Longpress event (20 & 21)"), F("p001_elp"), PCONFIG_LONG(1));
       // addFormNumericBox(F("Extra-Longpress min. interval (ms)"), F("p001_elpmininterval"), PCONFIG_LONG(2), 500, 2000);
-     char sensor[P90_Nchars];
-     LoadCustomTaskSettings(event->TaskIndex, (byte*)&sensor, P90_Nchars);
-     addFormTextBox(String(F("[温度传感器名称#值]")) , F("P090_temp_form_senser"), sensor, 64);
-     strncpy(sensor,  WebServer.arg(F("p089_ping_host")).c_str() , sizeof(sensor));
+        {
+          String strings[P90_Nlines];
+          LoadCustomTaskSettings(event->TaskIndex, strings, P90_Nlines, P90_Nchars);
+          for (byte varNr = 0; varNr < 8; varNr++)
+          {
+            addFormTextBox(String(F("[温度传感器名称#值]")) + (varNr + 1), getPluginCustomArgName(varNr), strings[varNr], 64);
+          }
+        }
 
 
       success = true;
@@ -176,7 +180,6 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SAVE:
     {
-      char sensor[P90_Nchars];
       PCONFIG(0) = getFormItemInt(F("p090_lowest_speed"));
       PCONFIG(1) = getFormItemInt(F("p090_fullspeed_temp"));
       PCONFIG(2) = getFormItemInt(F("p090_speed_up_temp"));
@@ -185,8 +188,19 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
       // PCONFIG_LONG(1) = isFormItemChecked(F("p001_elp"));
       // PCONFIG_LONG(2) = getFormItemInt(F("p001_elpmininterval"));
 
-      strncpy(sensor, WebServer.arg(F("p000_temp_form_sensor")).c_str(),sizeof(sensor));
-      SaveCustomTaskSettings(event->TaskIndex, (byte*)&strncpy, 64);
+        char deviceTemplate[P90_Nlines][P90_Nchars];
+        String error;
+        for (byte varNr = 0; varNr < P90_Nlines; varNr++)
+        {
+          if (!safe_strncpy(deviceTemplate[varNr], WebServer.arg(getPluginCustomArgName(varNr)), P90_Nchars)) {
+            error += getCustomTaskSettingsError(varNr);
+          }
+        }
+        if (error.length() > 0) {
+          addHtmlError(error);
+        }
+        SaveCustomTaskSettings(event->TaskIndex, (byte*)&deviceTemplate, sizeof(deviceTemplate));
+      //SaveCustomTaskSettings(event->TaskIndex, (byte*)&strncpy, 64);
 
 
       // check if a task has been edited and remove 'task' bit from the previous pin
