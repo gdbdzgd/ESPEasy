@@ -27,7 +27,7 @@
 #define PLUGIN_090
 #define PLUGIN_ID_090         90
 #define PLUGIN_NAME_090       "PWM fan control"
-#define PLUGIN_VALUENAME1_090 "State"
+#define PLUGIN_VALUENAME1_090 "PWM speed"
 #ifdef USE_SERVO
 Servo servo1;
 Servo servo2;
@@ -94,14 +94,14 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
     case PLUGIN_DEVICE_ADD:
     {
       Device[++deviceCount].Number           = PLUGIN_ID_090;
-      Device[deviceCount].Type               = DEVICE_TYPE_ANALOG;
-      Device[deviceCount].VType              = SENSOR_TYPE_SINGLE;
+      Device[deviceCount].Type               = DEVICE_TYPE_SINGLE;
+      Device[deviceCount].VType              = SENSOR_TYPE_SWITCH;
       Device[deviceCount].Ports              = 0;
       Device[deviceCount].PullUpOption       = false;
       Device[deviceCount].InverseLogicOption = false;
       Device[deviceCount].FormulaOption      = true;
       Device[deviceCount].ValueCount         = 1;
-      Device[deviceCount].SendDataOption     = false;
+      Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].TimerOptional      = true;
       Device[deviceCount].GlobalSyncOption   = true;
@@ -129,7 +129,7 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
       // - servo output
       // - sending pulses
       // - playing tunes
-      event->String1 = formatGpioName_bidirectional("");
+      event->String1 = formatGpioName_bidirectional("PWM");
       break;
     }
 
@@ -138,6 +138,7 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
       // @giig1967g: set current task value for taking actions after changes in the task gpio
       const uint32_t key = createKey(PLUGIN_ID_090, CONFIG_PIN1);
 
+      //addFormPinSelect(F("PWM GPIO"), F("p090_pwm_pin"), CONFIG_PIN1);
       if (existPortStatus(key)) {
         globalMapPortStatus[key].previousTask = event->TaskIndex;
       }
@@ -329,6 +330,9 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
     }
     case PLUGIN_ONCE_A_SECOND:
       {
+          String log;
+          log  = F("fan   : once a second ");
+          addLog(LOG_LEVEL_INFO, log);
       }
 
     case PLUGIN_READ:
@@ -340,11 +344,12 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
         {
           if (strings[x].length())
           {
-            String stemp100 = parseTemplate(strings[x], P90_Nchars );
-            //int inttemp100 = stemp100.toInt();
+            String stemp = parseTemplate(strings[x], P90_Nchars );
+            float inttemp = stemp.toInt();
             //std::stoi (stemp100,nullptr,10);
               log  = F("SW   : read temp*100 ");
-              log += stemp100;
+              log += inttemp*10;
+              addLog(LOG_LEVEL_INFO, log);
           }
         }
         success = false;
