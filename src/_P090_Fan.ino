@@ -38,6 +38,7 @@ Servo servo2;
 #define P90_Nlines 8        // The number of different lines which can be displayed
 #define P90_Nchars 64
 // FIXME TD-er: needed to store values for switch plugin which need extra data like PWM.
+int P090_PWM_PIN;
 typedef uint16_t portStateExtra_t;
 std::map<uint32_t, portStateExtra_t> p090_MapPortStatus_extras;
 
@@ -138,7 +139,8 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
       // @giig1967g: set current task value for taking actions after changes in the task gpio
       const uint32_t key = createKey(PLUGIN_ID_090, CONFIG_PIN1);
 
-      //addFormPinSelect(F("PWM GPIO"), F("p090_pwm_pin"), CONFIG_PIN1);
+      addFormPinSelect(F("PWM GPIO"), F("p090_pwm_pin"), CONFIG_PIN2);
+      P090_PWM_PIN = CONFIG_PIN2;
       if (existPortStatus(key)) {
         globalMapPortStatus[key].previousTask = event->TaskIndex;
       }
@@ -150,7 +152,7 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
    //3: frequecy :pwm frequcy
    //4: full_speed_pwm (100*10) 1000
       addFormNumericBox(F("最低转速(百分比)"),
-                        F("p090_lowest_speed"),
+                        F("p090_start_speed"),
                         round(PCONFIG(0)),0,100);
       addFormNumericBox(F("满转速温度℃ "),
                         F("p090_fullspeed_temp"),
@@ -181,10 +183,12 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SAVE:
     {
-      PCONFIG(0) = getFormItemInt(F("p090_lowest_speed"));
+      PCONFIG(0) = getFormItemInt(F("p090_start_speed"));
       PCONFIG(1) = getFormItemInt(F("p090_fullspeed_temp"));
       PCONFIG(2) = getFormItemInt(F("p090_speed_up_temp"));
       PCONFIG(3) = getFormItemInt(F("p090_frequency"));
+      P090_PWM_PIN = CONFIG_PIN2;
+//      CONFIG_PIN2 = getFormaddFormPinSelect(F("PWM GPIO"), F("p090_pwm_pin"), CONFIG_PIN2);
       // TO-DO: add Extra-Long Press event
       // PCONFIG_LONG(1) = isFormItemChecked(F("p001_elp"));
       // PCONFIG_LONG(2) = getFormItemInt(F("p001_elpmininterval"));
@@ -327,17 +331,16 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_TEN_PER_SECOND:
     {
+	break;
     }
     case PLUGIN_ONCE_A_SECOND:
       {
-          String log;
-          log  = F("fan   : once a second ");
-          addLog(LOG_LEVEL_INFO, log);
-      }
-
-    case PLUGIN_READ:
-      {
-      String log     = "";
+//pwm=`echo "($input-$speed_up_temp)*(($full_speed-$start_speed)/($full_speed_temp-$speed_up_temp))+$start_speed"|bc -l`
+        String log     = "";
+	if (CONFIG_PIN1 == -1) break;
+	int inttemp = -1;
+	int duty = -1;
+	float pwm = -1;
         String strings[P90_Nlines];
         LoadCustomTaskSettings(event->TaskIndex, strings, P90_Nlines, P90_Nchars);
         for (byte x = 0; x < P90_Nlines; x++)
@@ -345,14 +348,47 @@ boolean Plugin_090(byte function, struct EventStruct *event, String& string)
           if (strings[x].length())
           {
             String stemp = parseTemplate(strings[x], P90_Nchars );
-            float inttemp = stemp.toInt();
+            inttemp = stemp.toInt();
+          }
+        }
+
+       PCONFIG(0) = getFormItemInt(F("p090_start_speed"));
+       PCONFIG(1) = getFormItemInt(F("p090_fullspeed_temp"));
+       PCONFIG(2) = getFormItemInt(F("p090_speed_up_temp"));
+       PCONFIG(3) = getFormItemInt(F("p090_frequency"));
+       PCONFIG(4) = getFormItemInt(F("p090_full_speed"));
+	pwm=((inttemp-PCONFIG(2))*((PCONFIG(4)-PCONFIG(0))/(PCONFIG(1)-PCONFIG(2)))+PCONFIG(0));
+	duty=pwm*1024/100;
+        log  = F("SW   : fan ctrl  ");
+        log += pwm;
+        if (inttemp <= PCONFIG(2)) duty = PCONFIG(0)*1024/100;
+        if (inttemp >= PCONFIG(1)) duty = 1024;
+        pinMode(event->Par1, OUTPUT);
+        analogWriteFreq(PCONFIG(3));
+        analogWrite(CONFIG_PIN1 , duty);
+        addLog(LOG_LEVEL_INFO, log);
+        success = true;
+        break;
+      }
+
+    case PLUGIN_READ:
+      {
+        String log     = "";
+        String strings[P90_Nlines];
+        LoadCustomTaskSettings(event->TaskIndex, strings, P90_Nlines, P90_Nchars);
+        for (byte x = 0; x < P90_Nlines; x++)
+        {
+          if (strings[x].length())
+          {
+            String stemp = parseTemplate(strings[x], P90_Nchars );
+            //int inttemp = stemp.toInt();
             //std::stoi (stemp100,nullptr,10);
               log  = F("SW   : read temp*100 ");
-              log += inttemp*10;
+              log += stemp;
               addLog(LOG_LEVEL_INFO, log);
           }
         }
-        success = false;
+        success = true;
         break;
       }
     case PLUGIN_WRITE:
